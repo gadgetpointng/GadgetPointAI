@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark navy HUD palette */
+    --color-bg: 218 45% 6%;
+    --color-bg-elevated: 218 40% 9%;
+    --color-surface: 218 38% 11%;
+    --color-border: 218 30% 18%;
+    --color-primary: 217 91% 55%;
+    --color-primary-hover: 217 91% 48%;
+    --color-text: 210 40% 95%;
+    --color-text-subtle: 215 20% 55%;
+
+    /* shadcn compat tokens */
+    --background: 218 45% 6%;
+    --foreground: 210 40% 95%;
+    --card: 218 40% 9%;
+    --card-foreground: 210 40% 95%;
+    --popover: 218 38% 11%;
+    --popover-foreground: 210 40% 95%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 30% 15%;
+    --secondary-foreground: 210 40% 95%;
+    --muted: 218 25% 14%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 218 30% 16%;
+    --accent-foreground: 210 40% 95%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 30% 18%;
+    --input: 218 30% 14%;
+    --ring: 217 91% 55%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-[hsl(var(--color-bg))] text-[hsl(var(--color-text))];
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--color-bg));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--color-border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--color-text-subtle));
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-[hsl(var(--color-surface))] border border-[hsl(var(--color-border))];
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-effect {
+    background: rgba(15, 22, 41, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--color-border));
+  }
+}
