@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { CartProvider } from "@/stores/CartContext";
@@ -6,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import CartDrawer from "@/components/CartDrawer";
 import HomePage from "@/pages/HomePage";
 import ProductsPage from "@/pages/ProductsPage";
+import { publishWorkflowEvent } from "@/lib/workflowosBridge";
 
 function NotFound() {
   return (
@@ -22,6 +24,25 @@ function NotFound() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const heartbeatKey = "workflowos:gadgetpoint-site-heartbeat:v1";
+
+    try {
+      if (window.sessionStorage.getItem(heartbeatKey)) return;
+      window.sessionStorage.setItem(heartbeatKey, new Date().toISOString());
+    } catch {
+      // Session storage can be unavailable in restrictive browser modes.
+    }
+
+    void publishWorkflowEvent("site.heartbeat", {
+      name: "GadgetPoint Storefront",
+      slug: "gadgetpoint-storefront",
+      site_type: "commerce",
+      domain: window.location.hostname,
+      capabilities: ["events"],
+    });
+  }, []);
+
   return (
     <BrowserRouter>
       <CartProvider>
