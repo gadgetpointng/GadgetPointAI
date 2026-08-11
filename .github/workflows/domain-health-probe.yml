@@ -1,0 +1,29 @@
+name: GadgetPoint domain health probe
+
+on:
+  push:
+    branches:
+      - domain-health-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check HTTP and HTTPS
+        shell: bash
+        run: |
+          set -u
+          echo "HTTP probe"
+          HTTP_CODE=$(curl --silent --show-error --location --output /tmp/http-body --write-out '%{http_code}' --max-time 20 http://gadgetpoint.ng/ || true)
+          echo "HTTP status: ${HTTP_CODE}"
+          echo "HTTPS probe"
+          HTTPS_CODE=$(curl --silent --show-error --location --output /tmp/https-body --write-out '%{http_code}' --max-time 20 https://gadgetpoint.ng/ || true)
+          echo "HTTPS status: ${HTTPS_CODE}"
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTPS_CODE}" != "200" ]; then
+            echo "Neither HTTP nor HTTPS returned 200"
+            exit 1
+          fi
