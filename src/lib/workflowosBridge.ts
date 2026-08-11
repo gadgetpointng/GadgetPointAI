@@ -1,4 +1,5 @@
 type WorkflowEventType =
+  | "site.heartbeat"
   | "storefront.search"
   | "product.view"
   | "cart.added";
