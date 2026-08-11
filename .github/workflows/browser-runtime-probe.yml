@@ -11,21 +11,66 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Open live storefront in headless Chrome
+      - name: Inspect deployed bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error https://gadgetpoint.ng/ -o /tmp/index.html
+          SCRIPT=$(grep -oE 'src="[^"]+\.js"' /tmp/index.html | head -n1 | cut -d'"' -f2)
+          test -n "$SCRIPT"
+          case "$SCRIPT" in
+            http*) ASSET_URL="$SCRIPT" ;;
+            /*) ASSET_URL="https://gadgetpoint.ng${SCRIPT}" ;;
+            *) ASSET_URL="https://gadgetpoint.ng/${SCRIPT}" ;;
+          esac
+          curl --fail --silent --show-error "$ASSET_URL" -o /tmp/app.js
+          echo "Live asset: $ASSET_URL"
+          if grep -q 'gadgetpoint-storefront' /tmp/app.js; then
+            echo "Heartbeat bundle marker: present"
+          else
+            echo "Heartbeat bundle marker: missing"
+          fi
+
+      - name: Exercise live app with Chromium and capture runtime signals
         shell: bash
         run: |
           set -euo pipefail
           CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
           test -n "$CHROME"
-          "$CHROME" \
-            --headless \
-            --no-sandbox \
-            --disable-gpu \
-            --virtual-time-budget=8000 \
-            --dump-dom \
-            https://gadgetpoint.ng/ > /tmp/gadgetpoint-dom.html
-          test -s /tmp/gadgetpoint-dom.html
-          grep -q "GadgetPoint" /tmp/gadgetpoint-dom.html
-          echo "Live storefront executed successfully in Chromium"
+          mkdir -p /tmp/browserprobe
+          cd /tmp/browserprobe
+          npm init -y >/dev/null 2>&1
+          npm install --silent --no-save puppeteer-core@24
+          cat > probe.mjs <<'EOF'
+          import puppeteer from 'puppeteer-core';
+
+          const browser = await puppeteer.launch({
+            executablePath: process.env.CHROME,
+            headless: true,
+            args: ['--no-sandbox', '--disable-gpu'],
+          });
+          const page = await browser.newPage();
+          page.on('console', (msg) => console.log(`[console:${msg.type()}] ${msg.text()}`));
+          page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
+          page.on('requestfailed', (req) => console.log(`[requestfailed] ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+          page.on('response', (res) => {
+            const url = res.url();
+            if (url.includes('supabase.co') || url.includes('gadgetpoint.ng')) {
+              console.log(`[response] ${res.status()} ${url}`);
+            }
+          });
+
+          const response = await page.goto('https://gadgetpoint.ng/', { waitUntil: 'networkidle2', timeout: 30000 });
+          console.log(`[navigation] ${response?.status()} ${page.url()}`);
+          await new Promise((resolve) => setTimeout(resolve, 8000));
+          console.log(`[title] ${await page.title()}`);
+          const text = await page.$eval('body', (el) => el.innerText.slice(0, 600));
+          console.log(`[body] ${text.replace(/\s+/g, ' ')}`);
+          const marker = await page.evaluate(() => sessionStorage.getItem('workflowos:gadgetpoint-site-heartbeat:v1'));
+          console.log(`[heartbeat-marker] ${marker ? 'present' : 'missing'}`);
+          await browser.close();
+          if (!marker) process.exit(2);
+          EOF
+          CHROME="$CHROME" node probe.mjs
