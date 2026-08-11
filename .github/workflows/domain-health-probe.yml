@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pages: write
 
 jobs:
   probe:
@@ -16,14 +17,23 @@ jobs:
       - name: Check HTTP and HTTPS
         shell: bash
         run: |
-          set -u
-          echo "HTTP probe"
-          HTTP_CODE=$(curl --silent --show-error --location --output /tmp/http-body --write-out '%{http_code}' --max-time 20 http://gadgetpoint.ng/ || true)
+          set -euo pipefail
+          HTTP_CODE=$(curl --silent --show-error --location --output /tmp/http-body --write-out '%{http_code}' --max-time 20 http://gadgetpoint.ng/)
+          HTTPS_CODE=$(curl --silent --show-error --location --output /tmp/https-body --write-out '%{http_code}' --max-time 20 https://gadgetpoint.ng/)
           echo "HTTP status: ${HTTP_CODE}"
-          echo "HTTPS probe"
-          HTTPS_CODE=$(curl --silent --show-error --location --output /tmp/https-body --write-out '%{http_code}' --max-time 20 https://gadgetpoint.ng/ || true)
           echo "HTTPS status: ${HTTPS_CODE}"
-          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTPS_CODE}" != "200" ]; then
-            echo "Neither HTTP nor HTTPS returned 200"
-            exit 1
-          fi
+          test "${HTTPS_CODE}" = "200"
+
+      - name: Enforce HTTPS on GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request PUT \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --header "Content-Type: application/json" \
+            --data '{"https_enforced":true}' \
+            https://api.github.com/repos/gadgetpointng/GadgetPointAI/pages
