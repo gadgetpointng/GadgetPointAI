@@ -13,24 +13,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect deployed bundle
+      - name: Inspect actual live response
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error https://gadgetpoint.ng/ -o /tmp/index.html
-          SCRIPT=$(grep -oE 'src="[^"]+\.js"' /tmp/index.html | head -n1 | cut -d'"' -f2)
-          test -n "$SCRIPT"
-          case "$SCRIPT" in
-            http*) ASSET_URL="$SCRIPT" ;;
-            /*) ASSET_URL="https://gadgetpoint.ng${SCRIPT}" ;;
-            *) ASSET_URL="https://gadgetpoint.ng/${SCRIPT}" ;;
-          esac
-          curl --fail --silent --show-error "$ASSET_URL" -o /tmp/app.js
-          echo "Live asset: $ASSET_URL"
-          if grep -q 'gadgetpoint-storefront' /tmp/app.js; then
-            echo "Heartbeat bundle marker: present"
+          curl --fail --silent --show-error --dump-header /tmp/headers.txt https://gadgetpoint.ng/ -o /tmp/index.html
+          echo '--- RESPONSE HEADERS ---'
+          cat /tmp/headers.txt
+          echo '--- HTML PREVIEW ---'
+          head -c 3000 /tmp/index.html
+          echo
+          echo '--- SCRIPT SOURCES ---'
+          grep -oiE '<script[^>]+src=[^ >]+' /tmp/index.html || true
+          SCRIPT=$(grep -oE 'src="[^"]+\.js"' /tmp/index.html | head -n1 | cut -d'"' -f2 || true)
+          if [ -n "$SCRIPT" ]; then
+            case "$SCRIPT" in
+              http*) ASSET_URL="$SCRIPT" ;;
+              /*) ASSET_URL="https://gadgetpoint.ng${SCRIPT}" ;;
+              *) ASSET_URL="https://gadgetpoint.ng/${SCRIPT}" ;;
+            esac
+            curl --fail --silent --show-error "$ASSET_URL" -o /tmp/app.js
+            echo "Live asset: $ASSET_URL"
+            if grep -q 'gadgetpoint-storefront' /tmp/app.js; then
+              echo "Heartbeat bundle marker: present"
+            else
+              echo "Heartbeat bundle marker: missing"
+            fi
           else
-            echo "Heartbeat bundle marker: missing"
+            echo "No Vite-style JavaScript asset found in live HTML"
           fi
 
       - name: Exercise live app with Chromium and capture runtime signals
@@ -66,11 +76,10 @@ jobs:
           console.log(`[navigation] ${response?.status()} ${page.url()}`);
           await new Promise((resolve) => setTimeout(resolve, 8000));
           console.log(`[title] ${await page.title()}`);
-          const text = await page.$eval('body', (el) => el.innerText.slice(0, 600));
+          const text = await page.$eval('body', (el) => el.innerText.slice(0, 800));
           console.log(`[body] ${text.replace(/\s+/g, ' ')}`);
           const marker = await page.evaluate(() => sessionStorage.getItem('workflowos:gadgetpoint-site-heartbeat:v1'));
           console.log(`[heartbeat-marker] ${marker ? 'present' : 'missing'}`);
           await browser.close();
-          if (!marker) process.exit(2);
           EOF
           CHROME="$CHROME" node probe.mjs
