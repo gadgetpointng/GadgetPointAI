@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Product, CartItem } from "@/types";
+import { publishWorkflowEvent } from "@/lib/workflowosBridge";
 
 export function useCart() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -16,6 +17,16 @@ export function useCart() {
       }
       return [...prev, { ...product, quantity: 1 }];
     });
+
+    void publishWorkflowEvent("cart.added", {
+      product_id: product.id,
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      price: product.price,
+      quantity: 1,
+    });
+
     toast.success(`${product.name} added to cart`);
   };
 
