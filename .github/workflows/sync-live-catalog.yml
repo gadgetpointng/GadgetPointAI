@@ -1,0 +1,39 @@
+name: Sync live GadgetPoint catalog to WorkflowOS
+
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflowos-live-catalog-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout integration runner
+        uses: actions/checkout@v4
+
+      - name: Sync production catalog into WorkflowOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL=$(sed -n 's/^const WORKFLOWOS_SUPABASE_URL = "\(.*\)";/\1/p' src/lib/workflowosBridge.ts)
+          KEY=$(sed -n 's/^const WORKFLOWOS_PUBLISHABLE_KEY = "\(.*\)";/\1/p' src/lib/workflowosBridge.ts)
+          test -n "$BASE_URL"
+          test -n "$KEY"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            --retry-delay 5 \
+            --request POST \
+            --header "content-type: application/json" \
+            --header "apikey: ${KEY}" \
+            --header "authorization: Bearer ${KEY}" \
+            --data '{}' \
+            "${BASE_URL}/functions/v1/gadgetpoint-live-catalog-sync"
