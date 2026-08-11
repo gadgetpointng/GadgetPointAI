@@ -1,0 +1,31 @@
+name: GadgetPoint browser runtime probe
+
+on:
+  push:
+    branches:
+      - domain-health-probe
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Open live storefront in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
+          test -n "$CHROME"
+          "$CHROME" \
+            --headless \
+            --no-sandbox \
+            --disable-gpu \
+            --virtual-time-budget=8000 \
+            --dump-dom \
+            https://gadgetpoint.ng/ > /tmp/gadgetpoint-dom.html
+          test -s /tmp/gadgetpoint-dom.html
+          grep -q "GadgetPoint" /tmp/gadgetpoint-dom.html
+          echo "Live storefront executed successfully in Chromium"
