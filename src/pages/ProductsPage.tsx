@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { PRODUCTS, CATEGORIES } from "@/types";
 import ProductCard from "@/components/features/ProductCard";
 import ProductModal from "@/components/features/ProductModal";
 import { useCartContext } from "@/stores/CartContext";
+import { publishWorkflowEvent } from "@/lib/workflowosBridge";
 import type { Product } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
+  const lastPublishedSearch = useRef("");
   const activeCategory = searchParams.get("category") || "all";
 
   const filtered = useMemo(() => {
@@ -60,6 +62,28 @@ export default function ProductsPage() {
 
     return list;
   }, [activeCategory, search, sort]);
+
+  useEffect(() => {
+    const query = search.trim().replace(/\s+/g, " ");
+    if (query.length < 2) {
+      if (!query) lastPublishedSearch.current = "";
+      return;
+    }
+
+    const signalKey = `${activeCategory}:${query.toLowerCase()}`;
+    const timer = window.setTimeout(() => {
+      if (lastPublishedSearch.current === signalKey) return;
+      lastPublishedSearch.current = signalKey;
+
+      void publishWorkflowEvent("storefront.search", {
+        query,
+        category: activeCategory === "all" ? null : activeCategory,
+        result_count: filtered.length,
+      });
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeCategory, filtered.length, search]);
 
   const setCategory = (id: string) => {
     if (id === "all") {
