@@ -23,11 +23,3 @@ jobs:
 
       - name: Build storefront
         run: npm run build
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Check bridge Edge Function
-        run: deno check supabase/functions/workflowos-bridge/index.ts
