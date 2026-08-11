@@ -1,0 +1,51 @@
+name: Trace live GadgetPoint production site
+
+on:
+  push:
+    branches:
+      - domain-health-probe
+
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe production endpoints and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for URL in \
+            'https://gadgetpoint.ng/' \
+            'https://gadgetpoint.ng/admin' \
+            'https://gadgetpoint.ng/api/store' \
+            'https://gadgetpoint-ng.elven-bream-0795.chatgpt.site/' \
+            'https://gadgetpoint-ng.elven-bream-0795.chatgpt.site/admin' \
+            'https://gadgetpoint-ng.elven-bream-0795.chatgpt.site/api/store'
+          do
+            echo "=== ${URL} ==="
+            curl --silent --show-error --location --max-time 20 \
+              --dump-header /tmp/headers \
+              --output /tmp/body \
+              --write-out 'status=%{http_code} final=%{url_effective} type=%{content_type}\n' \
+              "$URL" || true
+            grep -Ei '^(server|location|content-type|cf-ray|x-|set-cookie):' /tmp/headers | head -n 30 || true
+            head -c 1600 /tmp/body | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g'
+            echo
+            echo
+          done
+
+          echo '=== ASSET / API STRING TRACE ==='
+          curl --fail --silent --show-error https://gadgetpoint.ng/ -o /tmp/index.html
+          grep -oE 'href="/assets/[^"]+\.js"' /tmp/index.html | cut -d'"' -f2 | sort -u > /tmp/assets.txt || true
+          while read -r asset; do
+            [ -n "$asset" ] || continue
+            echo "--- $asset ---"
+            curl --fail --silent --show-error "https://gadgetpoint.ng${asset}" -o /tmp/asset.js || continue
+            grep -Eo 'https?://[^"'"'"'[:space:]<>]+|/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/asset.js | \
+              grep -Ei 'api|admin|store|chatgpt|supabase|cloudflare|github|webhook|integration' | \
+              sort -u | head -n 120 || true
+            grep -Eo 'sourceMappingURL=[^[:space:]]+' /tmp/asset.js | tail -n 2 || true
+          done < /tmp/assets.txt
