@@ -1,0 +1,33 @@
+name: Run live GadgetPoint catalog sync
+
+on:
+  push:
+    branches:
+      - domain-health-probe
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trigger WorkflowOS live catalog sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL=$(sed -n 's/^const WORKFLOWOS_SUPABASE_URL = "\(.*\)";/\1/p' src/lib/workflowosBridge.ts)
+          KEY=$(sed -n 's/^const WORKFLOWOS_PUBLISHABLE_KEY = "\(.*\)";/\1/p' src/lib/workflowosBridge.ts)
+          test -n "$BASE_URL"
+          test -n "$KEY"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "content-type: application/json" \
+            --header "apikey: ${KEY}" \
+            --header "authorization: Bearer ${KEY}" \
+            --data '{}' \
+            "${BASE_URL}/functions/v1/gadgetpoint-live-catalog-sync"
