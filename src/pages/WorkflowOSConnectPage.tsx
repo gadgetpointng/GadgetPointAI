@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const WORKFLOWOS_HANDOFF_URL =
-  "https://workflowos-nine.vercel.app/auth/gadgetpoint/browser-handoff";
+  "https://workflow.gadgetpoint.ng/auth/gadgetpoint/browser-handoff";
 
 export default function WorkflowOSConnectPage() {
   const [status, setStatus] = useState("Checking your GadgetPoint session…");
