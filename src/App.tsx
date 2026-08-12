@@ -52,6 +52,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/workflowos" element={<WorkflowOSConnectPage />} />
           <Route path="/workflowos-connect" element={<WorkflowOSConnectPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
