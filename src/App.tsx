@@ -7,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import CartDrawer from "@/components/CartDrawer";
 import HomePage from "@/pages/HomePage";
 import ProductsPage from "@/pages/ProductsPage";
+import WorkflowOSConnectPage from "@/pages/WorkflowOSConnectPage";
 import { publishWorkflowEvent } from "@/lib/workflowosBridge";
 
 function NotFound() {
@@ -51,6 +52,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/workflowos-connect" element={<WorkflowOSConnectPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Footer />
