@@ -1,5 +1,6 @@
 name: Sync live GadgetPoint catalog to WorkflowOS
 
+# Comment-only freshness trigger: keep the production mirror current while scheduled GitHub runs remain best-effort.
 on:
   schedule:
     - cron: '17,47 * * * *'
