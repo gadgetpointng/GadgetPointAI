@@ -1,4 +1,4 @@
-name: Trace live GadgetPoint Admin messaging surface
+name: Inspect live GadgetPoint Admin messenger contract
 
 on:
   push:
@@ -13,50 +13,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect live Admin assets and messaging routes
+      - name: Trace Admin message client contract
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location https://gadgetpoint.ng/admin -o /tmp/admin.html
-          echo '=== ADMIN HTML HEAD ==='
-          head -c 2500 /tmp/admin.html | tr '\n' ' '
-          echo
+          grep -Eo '(src|href)="/[^"]+\.js[^" ]*"' /tmp/admin.html | sed -E 's/^(src|href)="//; s/"$//' | sort -u > /tmp/root-assets.txt || true
 
-          echo '=== SCRIPT ASSETS ==='
-          grep -Eo '(src|href)="/[^"]+\.js[^" ]*"' /tmp/admin.html | sed -E 's/^(src|href)="//; s/"$//' | sort -u > /tmp/admin-assets.txt || true
-          cat /tmp/admin-assets.txt
-
-          : > /tmp/all-admin.js
+          : > /tmp/root.js
           while read -r asset; do
             [ -n "$asset" ] || continue
-            echo "fetching ${asset}"
-            curl --fail --silent --show-error --location "https://gadgetpoint.ng${asset}" -o /tmp/asset.js || continue
-            cat /tmp/asset.js >> /tmp/all-admin.js
-            echo >> /tmp/all-admin.js
-          done < /tmp/admin-assets.txt
+            curl --fail --silent --show-error --location "https://gadgetpoint.ng${asset}" -o /tmp/a.js || continue
+            cat /tmp/a.js >> /tmp/root.js
+            echo >> /tmp/root.js
+          done < /tmp/root-assets.txt
 
-          echo '=== API ROUTES ==='
-          grep -Eo '/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/all-admin.js | sort -u | head -n 400 || true
+          echo '=== LAZY ASSETS MATCHING ADMIN / STAFF / WORKFLOW ==='
+          grep -Eo 'assets/[A-Za-z0-9_./-]+\.js' /tmp/root.js | sort -u | grep -Ei '(admin|staff|workflow|message|chat|page)' | head -n 160 | tee /tmp/lazy-assets.txt || true
 
-          echo '=== MESSAGING / WORKFLOW CONTEXT ==='
-          grep -Eoi '.{0,180}(message|messenger|chat|inbox|workflowos|staffEmail|externalStaffId|staffUsername|sendMessage|markRead).{0,220}' /tmp/all-admin.js | head -n 260 || true
+          : > /tmp/lazy.js
+          while read -r asset; do
+            [ -n "$asset" ] || continue
+            echo "fetching /${asset}"
+            curl --fail --silent --show-error --location "https://gadgetpoint.ng/${asset}" -o /tmp/lazy-one.js || continue
+            cat /tmp/lazy-one.js >> /tmp/lazy.js
+            echo >> /tmp/lazy.js
+          done < /tmp/lazy-assets.txt
 
-          echo '=== ROUTE CANDIDATE PROBES ==='
-          for path in \
-            /api/workflowos/messages \
-            /api/workflowos/message \
-            /api/messages \
-            /api/admin/messages \
-            /api/staff/messages \
-            /api/messenger \
-            /api/chat \
-            /api/admin-chat \
-            /api/workflowos/chat
-          do
+          cat /tmp/root.js /tmp/lazy.js > /tmp/all.js
+
+          echo '=== /api/admin/messages CONTEXT ==='
+          grep -Eoi '.{0,500}/api/admin/messages.{0,900}' /tmp/all.js | head -n 80 || true
+
+          echo '=== MESSAGE FUNCTION CONTEXT ==='
+          grep -Eoi '.{0,300}(admin/messages|sendMessage|mark.*read|recipient|sender|messageBody|body:|method:[^,}]+).{0,700}' /tmp/all.js | head -n 160 || true
+
+          echo '=== ALL LIVE ADMIN API STRINGS ==='
+          grep -Eo '/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/all.js | sort -u | head -n 400 || true
+
+          echo '=== METHOD PROBES WITHOUT AUTH ==='
+          for method in GET POST PATCH PUT DELETE; do
             body="$(mktemp)"
-            status="$(curl --silent --show-error --max-time 15 --output "$body" --write-out '%{http_code}' "https://gadgetpoint.ng${path}" || true)"
-            printf '%s -> HTTP %s :: ' "$path" "${status:-curl-error}"
-            head -c 180 "$body" | tr '\n' ' '
+            status="$(curl --silent --show-error --max-time 15 -X "$method" -H 'content-type: application/json' --data '{}' --output "$body" --write-out '%{http_code}' 'https://gadgetpoint.ng/api/admin/messages' || true)"
+            printf '%s -> HTTP %s :: ' "$method" "${status:-curl-error}"
+            head -c 250 "$body" | tr '\n' ' '
             echo
             rm -f "$body"
           done
