@@ -1,4 +1,4 @@
-name: Trace live GadgetPoint production site
+name: Trace live GadgetPoint Admin messaging surface
 
 on:
   push:
@@ -13,53 +13,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect admin bundle and unauthenticated UI
+      - name: Inspect live Admin assets and messaging routes
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error https://gadgetpoint.ng/admin -o /tmp/admin.html
-          echo '=== ADMIN ASSETS ==='
-          grep -oE 'href="/assets/[^"]+\.js"' /tmp/admin.html | cut -d'"' -f2 | sort -u > /tmp/admin-assets.txt || true
+          curl --fail --silent --show-error --location https://gadgetpoint.ng/admin -o /tmp/admin.html
+          echo '=== ADMIN HTML HEAD ==='
+          head -c 2500 /tmp/admin.html | tr '\n' ' '
+          echo
+
+          echo '=== SCRIPT ASSETS ==='
+          grep -Eo '(src|href)="/[^"]+\.js[^" ]*"' /tmp/admin.html | sed -E 's/^(src|href)="//; s/"$//' | sort -u > /tmp/admin-assets.txt || true
           cat /tmp/admin-assets.txt
 
-          echo '=== ADMIN API / AUTH STRINGS ==='
           : > /tmp/all-admin.js
           while read -r asset; do
             [ -n "$asset" ] || continue
-            curl --fail --silent --show-error "https://gadgetpoint.ng${asset}" -o /tmp/admin-asset.js || continue
-            cat /tmp/admin-asset.js >> /tmp/all-admin.js
+            echo "fetching ${asset}"
+            curl --fail --silent --show-error --location "https://gadgetpoint.ng${asset}" -o /tmp/asset.js || continue
+            cat /tmp/asset.js >> /tmp/all-admin.js
             echo >> /tmp/all-admin.js
           done < /tmp/admin-assets.txt
-          grep -Eo 'https?://[^"'"'"'[:space:]<>]+|/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/all-admin.js | sort -u | head -n 250 || true
-          echo '=== ADMIN KEYWORDS ==='
-          grep -Eoi '.{0,100}(login|password|username|session|cookie|token|staff|owner|integration|webhook|workflow).{0,140}' /tmp/all-admin.js | head -n 160 || true
 
-      - name: Inspect unauthenticated admin runtime safely
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser)
-          test -n "$CHROME"
-          mkdir -p /tmp/adminprobe && cd /tmp/adminprobe
-          npm init -y >/dev/null 2>&1
-          npm install --silent --no-save puppeteer-core@24
-          cat > probe.mjs <<'EOF'
-          import puppeteer from 'puppeteer-core';
-          const browser = await puppeteer.launch({ executablePath: process.env.CHROME, headless: true, args: ['--no-sandbox','--disable-gpu'] });
-          const page = await browser.newPage();
-          page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
-          page.on('requestfailed', (req) => console.log(`[requestfailed] ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
-          page.on('response', (res) => {
-            if (res.url().includes('/api/')) console.log(`[api] ${res.status()} ${res.request().method()} ${res.url()}`);
-          });
-          const response = await page.goto('https://gadgetpoint.ng/admin', { waitUntil: 'networkidle2', timeout: 30000 });
-          console.log(`[navigation] ${response?.status()} ${page.url()}`);
-          const title = await page.title();
-          const body = await page.$eval('body', (el) => el.innerText.slice(0, 2000));
-          console.log(`[title] ${title}`);
-          console.log(`[body] ${body.replace(/\s+/g,' ')}`);
-          console.log(`[password-inputs] ${await page.$$eval('input[type="password"]', els => els.length)}`);
-          console.log(`[forms] ${await page.$$eval('form', els => els.length)}`);
-          await browser.close();
-          EOF
-          CHROME="$CHROME" node probe.mjs
+          echo '=== API ROUTES ==='
+          grep -Eo '/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/all-admin.js | sort -u | head -n 400 || true
+
+          echo '=== MESSAGING / WORKFLOW CONTEXT ==='
+          grep -Eoi '.{0,180}(message|messenger|chat|inbox|workflowos|staffEmail|externalStaffId|staffUsername|sendMessage|markRead).{0,220}' /tmp/all-admin.js | head -n 260 || true
+
+          echo '=== ROUTE CANDIDATE PROBES ==='
+          for path in \
+            /api/workflowos/messages \
+            /api/workflowos/message \
+            /api/messages \
+            /api/admin/messages \
+            /api/staff/messages \
+            /api/messenger \
+            /api/chat \
+            /api/admin-chat \
+            /api/workflowos/chat
+          do
+            body="$(mktemp)"
+            status="$(curl --silent --show-error --max-time 15 --output "$body" --write-out '%{http_code}' "https://gadgetpoint.ng${path}" || true)"
+            printf '%s -> HTTP %s :: ' "$path" "${status:-curl-error}"
+            head -c 180 "$body" | tr '\n' ' '
+            echo
+            rm -f "$body"
+          done
