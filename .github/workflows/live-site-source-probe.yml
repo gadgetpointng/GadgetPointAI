@@ -1,4 +1,4 @@
-name: Probe WorkflowOS buyer request end to end
+name: Trace GadgetPoint staff WorkflowOS access contract
 
 on:
   push:
@@ -11,26 +11,31 @@ permissions:
 jobs:
   trace:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 8
     steps:
-      - name: Submit clearly tagged production buyer request
+      - name: Inspect staff-login bundle and access APIs
         shell: bash
         run: |
           set -euo pipefail
-          response="$(mktemp)"
-          status="$(curl --silent --show-error --max-time 30 \
-            --output "$response" \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header 'content-type: application/json' \
-            --header 'user-agent: WorkflowOS-MVP-E2E-Probe/1.0' \
-            --data '{"product_query":"Samsung 45W PD Adopter","buyer_name":"WorkflowOS MVP Smoke","email":"workflowos-mvp-smoke@gadgetpoint.ng","budget_max":6000,"city":"Enugu","state":"Enugu","urgency":"high","category":"Charging","brand":"Samsung","contact_consent":true,"attribution_source":"mvp-smoke","campaign":"production-e2e-20260817"}' \
-            'https://workflowos-nine.vercel.app/api/public/buyer-request')"
-          echo "buyer-request status=${status}"
-          cat "$response"
+          curl --fail --silent --show-error --location 'https://gadgetpoint.ng/staff-login' -o /tmp/staff.html
+          echo '=== STAFF LOGIN HTML ==='
+          head -c 2400 /tmp/staff.html | tr '\n' ' '
           echo
-          test "$status" = '201'
-          grep -q '"ok":true' "$response"
-          grep -q '"request_id"' "$response"
-          grep -q 'Samsung 45W PD Adopter' "$response"
-          grep -q '"available":true' "$response"
+
+          grep -Eo '(src|href)="/[^"]+\.js[^" ]*"' /tmp/staff.html | sed -E 's/^(src|href)="//; s/"$//' | sort -u > /tmp/assets.txt || true
+          : > /tmp/all.js
+          while read -r asset; do
+            [ -n "$asset" ] || continue
+            curl --fail --silent --show-error --location "https://gadgetpoint.ng${asset}" -o /tmp/asset.js || continue
+            cat /tmp/asset.js >> /tmp/all.js
+            echo >> /tmp/all.js
+          done < /tmp/assets.txt
+
+          echo '=== WORKFLOWOS ACCESS TEXT CONTEXT ==='
+          grep -Eoi '.{0,420}(WorkflowOS access is not configured yet|workflowos_access|workflowos|clock in|staff login).{0,900}' /tmp/all.js | head -n 220 || true
+
+          echo '=== STAFF / WORKFLOW API STRINGS ==='
+          grep -Eo '/api/[A-Za-z0-9_?&=./:{}-]+' /tmp/all.js | sort -u | grep -Ei '(staff|workflow|auth|login|clock|attendance|profile|admin)' | head -n 300 || true
+
+          echo '=== CONFIG / CALLBACK STRINGS ==='
+          grep -Eoi '.{0,260}(WORKFLOWOS|callback|return_to|access_enabled|permissions|staff-login|owner-login).{0,500}' /tmp/all.js | head -n 200 || true
